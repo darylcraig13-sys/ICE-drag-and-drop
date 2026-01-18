@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vehicle → Engine Type Match</title>
+  <style>
+    :root { --gap: 14px; --radius: 14px; }
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f6f7fb; color: #111; }
+    header { padding: 18px 16px; background: #fff; border-bottom: 1px solid #e6e6ef; }
+    main { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; gap: var(--gap); }
+    .row { display: grid; gap: var(--gap); }
+    @media (min-width: 900px) {
+      .row { grid-template-columns: 1fr 1fr 1fr; align-items: start; }
+    }
+
+    .panel {
+      background: #fff; border: 1px solid #e6e6ef; border-radius: var(--radius);
+      padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    }
+    h1 { font-size: 18px; margin: 0; }
+    h2 { font-size: 16px; margin: 0 0 10px; }
+    p { margin: 8px 0; line-height: 1.35; }
+    .hint { font-size: 13px; color: #444; }
+
+    .bank { min-height: 140px; }
+    .tokens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (min-width: 520px) { .tokens { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+    .token {
+      border: 1px solid #d8d8ea; border-radius: 12px; padding: 10px;
+      background: #fbfbff; cursor: grab; user-select: none;
+      display: grid; gap: 6px;
+    }
+    .token:active { cursor: grabbing; }
+    .token:focus { outline: 3px solid #4c8dff; outline-offset: 2px; }
+    .tag { font-size: 12px; color: #444; }
+    .sr { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+    .dropzone {
+      min-height: 260px;
+      display: grid; gap: 10px;
+      border: 2px dashed #cfd2ff;
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #fcfcff;
+    }
+    .dropzone[data-over="true"] { border-color: #4c8dff; background: #f1f6ff; }
+
+    .placed { display: grid; gap: 10px; }
+    .slot { display: grid; gap: 8px; }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    button {
+      border: 1px solid #d8d8ea; background: #fff; border-radius: 10px;
+      padding: 10px 12px; cursor: pointer;
+    }
+    button:focus { outline: 3px solid #4c8dff; outline-offset: 2px; }
+    .pill { font-size: 12px; padding: 6px 10px; border-radius: 999px; border: 1px solid #e6e6ef; background: #fff; }
+    .ok { border-color: #bfe9c7; background: #f2fff5; }
+    .bad { border-color: #ffd0d0; background: #fff5f5; }
+
+    .toast { margin-top: 10px; font-size: 14px; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; padding: 2px 6px; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Match the vehicle to the engine type</h1>
+    <p class="hint">
+      Drag the vehicle cards into the correct column. Prefer not to drag? Select a card, then choose a destination.
+    </p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>How to use (accessible controls)</h2>
+      <ul>
+        <li><strong>Drag & drop</strong> on touch or mouse.</li>
+        <li><strong>Keyboard / no-drag option:</strong> Focus a card (tap it or Tab), press <span class="kbd">Enter</span>, then choose a destination button.</li>
+        <li>Use <strong>Check answers</strong> to show correct/incorrect.</li>
+      </ul>
+      <div class="controls">
+        <button id="checkBtn" type="button">Check answers</button>
+        <button id="resetBtn" type="button">Reset</button>
+        <span class="pill" id="scorePill">Score: 0 / 0</span>
+      </div>
+      <div class="toast" aria-live="polite" id="live"></div>
+    </section>
+
+    <div class="row">
+      <section class="panel bank" aria-label="Vehicle cards">
+        <h2>Vehicle bank</h2>
+        <p class="hint">Pick up a card and place it in a column.</p>
+        <div class="tokens" id="bank"></div>
+      </section>
+
+      <section class="panel" aria-label="Intermittent combustion engine dropzone">
+        <h2>Intermittent combustion</h2>
+        <p class="hint">Examples: piston / reciprocating engines (e.g., most car engines). Combustion occurs in cycles.</p>
+
+        <div class="dropzone" id="zone-intermittent" data-zone="intermittent" tabindex="0"
+             aria-describedby="dzHelp1" role="region">
+          <span class="sr" id="dzHelp1">Drop cards here for intermittent combustion engines.</span>
+          <div class="placed" id="placed-intermittent"></div>
+        </div>
+
+        <div class="controls" style="margin-top:10px">
+          <button type="button" class="moveBtn" data-target="intermittent">Move selected here</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Continuous combustion engine dropzone">
+        <h2>Continuous combustion</h2>
+        <p class="hint">Examples: gas turbines / jet engines. Combustion happens continuously with steady airflow.</p>
+
+        <div class="dropzone" id="zone-continuous" data-zone="continuous" tabindex="0"
+             aria-describedby="dzHelp2" role="region">
+          <span class="sr" id="dzHelp2">Drop cards here for continuous combustion engines.</span>
+          <div class="placed" id="placed-continuous"></div>
+        </div>
+
+        <div class="controls" style="margin-top:10px">
+          <button type="button" class="moveBtn" data-target="continuous">Move selected here</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    // ----- EDIT YOUR ITEMS HERE -----
+    // engineType: "intermittent" or "continuous"
+    const ITEMS = [
+      { id: "car", label: "Car", detail: "Petrol/Diesel piston engine", engineType: "intermittent" },
+      { id: "motorbike", label: "Motorbike", detail: "Reciprocating piston engine", engineType: "intermittent" },
+      { id: "truck", label: "Truck", detail: "Diesel piston engine", engineType: "intermittent" },
+      { id: "piston-prop", label: "Prop aircraft (piston)", detail: "Piston engine + prop", engineType: "intermittent" },
+      { id: "jet", label: "Jet aircraft", detail: "Gas turbine / jet engine", engineType: "continuous" },
+      { id: "helicopter-turbine", label: "Helicopter (turboshaft)", detail: "Gas turbine driving rotor", engineType: "continuous" },
+      { id: "tank", label: "Armoured vehicle", detail: "Commonly piston/diesel (varies)", engineType: "intermittent" },
+      { id: "turbine-ship", label: "Ship (gas turbine)", detail: "Gas turbine propulsion (some vessels)", engineType: "continuous" }
+    ];
+    // -------------------------------
+
+    const bankEl = document.getElementById("bank");
+    const liveEl = document.getElementById("live");
+    const scorePill = document.getElementById("scorePill");
+    const checkBtn = document.getElementById("checkBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    const placed = {
+      intermittent: document.getElementById("placed-intermittent"),
+      continuous: document.getElementById("placed-continuous")
+    };
+
+    let selectedId = null;
+
+    function announce(msg) { liveEl.textContent = msg; }
+
+    function makeToken(item) {
+      const el = document.createElement("div");
+      el.className = "token";
+      el.setAttribute("draggable", "true");
+      el.setAttribute("role", "button");
+      el.setAttribute("tabindex", "0");
+      el.dataset.id = item.id;
+      el.dataset.correct = item.engineType;
+
+      el.innerHTML = `
+        <strong>${item.label}</strong>
+        <span class="tag">${item.detail}</span>
+        <span class="sr">Correct category: ${item.engineType}</span>
+      `;
+
+      // Drag handlers
+      el.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", item.id);
+        e.dataTransfer.effectAllowed = "move";
+        announce(`Picked up ${item.label}.`);
+      });
+
+      // Click / keyboard selection (no-drag)
+      el.addEventListener("click", () => selectToken(item.id, item.label));
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectToken(item.id, item.label);
+        }
+      });
+
+      return el;
+    }
+
+    function selectToken(id, label) {
+      selectedId = (selectedId === id) ? null : id;
+      // update visual selection
+      document.querySelectorAll(".token").forEach(t => {
+        t.style.boxShadow = (t.dataset.id === selectedId) ? "0 0 0 3px #4c8dff" : "none";
+      });
+      announce(selectedId ? `Selected ${label}. Choose a destination.` : `Selection cleared.`);
+    }
+
+    function allowDrop(zoneEl) {
+      zoneEl.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        zoneEl.dataset.over = "true";
+        e.dataTransfer.dropEffect = "move";
+      });
+      zoneEl.addEventListener("dragleave", () => zoneEl.dataset.over = "false");
+      zoneEl.addEventListener("drop", (e) => {
+        e.preventDefault();
+        zoneEl.dataset.over = "false";
+        const id = e.dataTransfer.getData("text/plain");
+        moveToZone(id, zoneEl.dataset.zone);
+      });
+    }
+
+    function moveToZone(id, zone) {
+      const token = document.querySelector(`.token[data-id="${CSS.escape(id)}"]`);
+      if (!token) return;
+
+      placed[zone].appendChild(token);
+      selectedId = null;
+      document.querySelectorAll(".token").forEach(t => t.style.boxShadow = "none");
+      clearMarking(token);
+      announce(`Moved to ${zone}.`);
+      updateScoreDisplay(false);
+    }
+
+    function moveToBank(id) {
+      const token = document.querySelector(`.token[data-id="${CSS.escape(id)}"]`);
+      if (!token) return;
+      bankEl.appendChild(token);
+      clearMarking(token);
+      updateScoreDisplay(false);
+    }
+
+    function clearMarking(token) {
+      token.classList.remove("ok", "bad");
+      token.style.borderColor = "";
+      token.style.background = "";
+    }
+
+    function checkAnswers() {
+      let totalPlaced = 0;
+      let correct = 0;
+
+      ["intermittent", "continuous"].forEach(zone => {
+        placed[zone].querySelectorAll(".token").forEach(token => {
+          totalPlaced++;
+          const isCorrect = token.dataset.correct === zone;
+          if (isCorrect) correct++;
+
+          token.classList.toggle("ok", isCorrect);
+          token.classList.toggle("bad", !isCorrect);
+        });
+      });
+
+      scorePill.textContent = `Score: ${correct} / ${totalPlaced}`;
+      announce(`Checked. You got ${correct} out of ${totalPlaced} correct.`);
+    }
+
+    function updateScoreDisplay(keepOld) {
+      if (keepOld) return;
+      // Score shown as placed count until checked
+      let totalPlaced = 0;
+      ["intermittent", "continuous"].forEach(zone => totalPlaced += placed[zone].querySelectorAll(".token").length);
+      scorePill.textContent = `Score: 0 / ${totalPlaced}`;
+    }
+
+    function resetAll() {
+      // move all tokens back to bank
+      document.querySelectorAll(".token").forEach(t => bankEl.appendChild(t));
+      document.querySelectorAll(".token").forEach(clearMarking);
+      selectedId = null;
+      scorePill.textContent = `Score: 0 / 0`;
+      announce("Reset complete.");
+    }
+
+    // Init
+    function init() {
+      ITEMS.forEach(item => bankEl.appendChild(makeToken(item)));
+
+      allowDrop(document.getElementById("zone-intermittent"));
+      allowDrop(document.getElementById("zone-continuous"));
+
+      document.querySelectorAll(".moveBtn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (!selectedId) return announce("No card selected.");
+          moveToZone(selectedId, btn.dataset.target);
+        });
+      });
+
+      // Optional: long-press/tap to return a card to the bank (context menu)
+      document.addEventListener("contextmenu", (e) => {
+        const token = e.target.closest(".token");
+        if (!token) return;
+        e.preventDefault();
+        moveToBank(token.dataset.id);
+        announce("Returned to bank.");
+      });
+
+      checkBtn.addEventListener("click", checkAnswers);
+      resetBtn.addEventListener("click", resetAll);
+    }
+
+    init();
+  </script>
+</body>
+</html>
